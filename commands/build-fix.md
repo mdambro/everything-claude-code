@@ -1,8 +1,8 @@
 # Build and Fix
 
-Incrementally fix TypeScript and build errors:
+Incrementally fix Rust and Flutter build errors:
 
-1. Run build: npm run build or pnpm build
+1. Run the relevant checks: `cargo check --workspace` and `flutter analyze`
 
 2. Parse error output:
    - Group by file

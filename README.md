@@ -3,7 +3,6 @@
 [![Stars](https://img.shields.io/github/stars/affaan-m/everything-claude-code?style=flat)](https://github.com/affaan-m/everything-claude-code/stargazers)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 ![Shell](https://img.shields.io/badge/-Shell-4EAA25?logo=gnu-bash&logoColor=white)
-![TypeScript](https://img.shields.io/badge/-TypeScript-3178C6?logo=typescript&logoColor=white)
 ![Markdown](https://img.shields.io/badge/-Markdown-000000?logo=markdown&logoColor=white)
 
 **The complete collection of Claude Code configs from an Anthropic hackathon winner.**
@@ -97,15 +96,15 @@ everything-claude-code/
 |   |-- tdd-guide.md         # Test-driven development
 |   |-- code-reviewer.md     # Quality and security review
 |   |-- security-reviewer.md # Vulnerability analysis
-|   |-- build-error-resolver.md
-|   |-- e2e-runner.md        # Playwright E2E testing
+|   |-- build-error-resolver.md # Rust and Flutter build errors
+|   |-- e2e-runner.md        # Flutter and backend flow testing
 |   |-- refactor-cleaner.md  # Dead code cleanup
 |   |-- doc-updater.md       # Documentation sync
 |
 |-- skills/           # Workflow definitions and domain knowledge
 |   |-- coding-standards/           # Language best practices
 |   |-- backend-patterns/           # API, database, caching patterns
-|   |-- frontend-patterns/          # React, Next.js patterns
+|   |-- frontend-patterns/          # Flutter and future Dioxus patterns
 |   |-- continuous-learning/        # Auto-extract patterns from sessions (Longform Guide)
 |   |-- strategic-compact/          # Manual compaction suggestions (Longform Guide)
 |   |-- tdd-workflow/               # TDD methodology
@@ -165,7 +164,7 @@ everything-claude-code/
 |   |-- user-CLAUDE.md      # Example user-level config
 |
 |-- mcp-configs/      # MCP server configurations
-|   |-- mcp-servers.json    # GitHub, Supabase, Vercel, Railway, etc.
+|   |-- mcp-servers.json    # GitHub, deployment, and documentation services
 |
 |-- marketplace.json  # Self-hosted marketplace config (for /plugin marketplace add)
 ```

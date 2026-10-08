@@ -1,100 +1,63 @@
-# Example Project CLAUDE.md
+# Example Project Instructions
 
-This is an example project-level CLAUDE.md file. Place this in your project root.
+Use this template for a project following the WorldFlowAI technology standards.
 
-## Project Overview
+## Technology Standards
 
-[Brief description of your project - what it does, tech stack]
+- Current client: Flutter/Dart.
+- Likely future client: Rust with Dioxus, only after confirming target platforms and ecosystem fit.
+- Backend: Rust with Tokio and Axum.
+- API gateway: Kong when gateway routing/policy is needed.
+- JWT identity: Keycloak as the initial issuer.
+- Feature flags: Flipt with configuration in the user-designated GitHub repository.
+- Database: PostgreSQL through SQLx.
 
-## Critical Rules
+Use another application language or framework only when the user explicitly requests it.
 
-### 1. Code Organization
+## Architecture
 
-- Many small files over few large files
-- High cohesion, low coupling
-- 200-400 lines typical, 800 max per file
-- Organize by feature/domain, not by type
+Apply Clean Architecture with inward dependencies:
 
-### 2. Code Style
+```text
+services/api/src/
+  domain/
+  application/
+  infrastructure/
+  main.rs
 
-- No emojis in code, comments, or documentation
-- Immutability always - never mutate objects or arrays
-- No console.log in production code
-- Proper error handling with try/catch
-- Input validation with Zod or similar
-
-### 3. Testing
-
-- TDD: Write tests first
-- 80% minimum coverage
-- Unit tests for utilities
-- Integration tests for APIs
-- E2E tests for critical flows
-
-### 4. Security
-
-- No hardcoded secrets
-- Environment variables for sensitive data
-- Validate all user inputs
-- Parameterized queries only
-- CSRF protection enabled
-
-## File Structure
-
-```
-src/
-|-- app/              # Next.js app router
-|-- components/       # Reusable UI components
-|-- hooks/            # Custom React hooks
-|-- lib/              # Utility libraries
-|-- types/            # TypeScript definitions
+apps/mobile/lib/
+  app/
+  features/
+  shared/
 ```
 
-## Key Patterns
+- Keep domain rules independent of Axum, SQLx, and external services.
+- Define use cases and ports in application; implement adapters in infrastructure.
+- Keep Axum handlers thin and authorize protected resources in the service.
+- Keep widgets separate from data access and business decisions.
+- PostgreSQL is the persistent store; prefer query-oriented denormalized models.
 
-### API Response Format
+## Feature Flags
 
-```typescript
-interface ApiResponse<T> {
-  success: boolean
-  data?: T
-  error?: string
-}
-```
+When a requirement needs a feature flag, the architect must ask which GitHub repository holds the Flipt configuration. Record the repository before finalizing the design; never assume it.
 
-### Error Handling
+## Date and Time
 
-```typescript
-try {
-  const result = await operation()
-  return { success: true, data: result }
-} catch (error) {
-  console.error('Operation failed:', error)
-  return { success: false, error: 'User-friendly message' }
-}
-```
+Store instants in UTC as PostgreSQL `timestamptz`; use RFC 3339 at API boundaries and display hours as zero-padded 24-hour `HH:mm:ss` after applying the display time zone.
 
-## Environment Variables
+## Quality Gates
 
 ```bash
-# Required
-DATABASE_URL=
-API_KEY=
-
-# Optional
-DEBUG=false
+cargo fmt --all --check
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace
+flutter analyze
+flutter test
 ```
 
-## Available Commands
+## Security
 
-- `/tdd` - Test-driven development workflow
-- `/plan` - Create implementation plan
-- `/code-review` - Review code quality
-- `/build-fix` - Fix build errors
-
-## Git Workflow
-
-- Conventional commits: `feat:`, `fix:`, `refactor:`, `docs:`, `test:`
-- Never commit to main directly
-- PRs require review
-- All tests must pass before merge
+- Validate Keycloak JWT signatures and issuer, audience, expiry, and required claims.
+- Use Kong for gateway policy where configured; do not rely on it as the only authorization layer.
+- Keep privileged credentials out of client builds.
+- Authenticate and authorize Axum WebSocket connections and each subscribed resource.
