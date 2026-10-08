@@ -2,6 +2,19 @@
 
 Quick reference for using the everything-claude-code toolkit with synapse and arbiter projects.
 
+## Application Technology Standards
+
+- **Current frontend**: Flutter.
+- **Future frontend direction**: Rust with Dioxus is the likely choice; validate target platforms and ecosystem maturity before committing to a migration.
+- **Backend**: Rust services using Tokio for async execution and Axum for HTTP APIs and WebSockets.
+- **API Gateway**: Kong when gateway routing or policy enforcement is required.
+- **Authentication/JWT**: Keycloak is the initial identity provider and JWT issuer.
+- **Feature flags**: Flipt, with flag configuration maintained in a project-designated GitHub repository. The architect must ask for that repository whenever a feature requires flags.
+- **Architecture**: Apply Clean Architecture with `domain`, `application`, and `infrastructure` boundaries; dependencies point inward.
+- **Persistence**: PostgreSQL accessed through `sqlx`. Prefer query-oriented, denormalized models and avoid normalization by default.
+- **Date/time**: Store instants in UTC as `timestamptz`; expose API timestamps as RFC 3339 and present times as `HH:mm:ss` in 24-hour format.
+- Treat technology examples in generic toolkit skills as examples only; these project standards take precedence for WorldFlowAI services.
+
 ## Installed Components
 
 | Type | Items |
@@ -102,6 +115,7 @@ claude
 - Recall-focused metrics (safety critical)
 - PII/Org sensitivity handling
 - Model lifecycle management
+- Python is for ML experimentation and model-specific workloads; production backend services and APIs use the Rust/Tokio/Axum stack above.
 
 ## Hooks (Automatic)
 

@@ -4,19 +4,14 @@
 
 ALWAYS create new objects, NEVER mutate:
 
-```javascript
-// WRONG: Mutation
-function updateUser(user, name) {
-  user.name = name  // MUTATION!
-  return user
+```rust
+#[derive(Clone)]
+struct User {
+    name: String,
 }
 
-// CORRECT: Immutability
-function updateUser(user, name) {
-  return {
-    ...user,
-    name
-  }
+fn update_user(user: &User, name: String) -> User {
+    User { name, ..user.clone() }
 }
 ```
 
@@ -32,13 +27,11 @@ MANY SMALL FILES > FEW LARGE FILES:
 
 ALWAYS handle errors comprehensively:
 
-```typescript
-try {
-  const result = await riskyOperation()
-  return result
-} catch (error) {
-  console.error('Operation failed:', error)
-  throw new Error('Detailed user-friendly message')
+```rust
+fn load_user(id: UserId) -> Result<User, ApplicationError> {
+    repository
+        .find_by_id(id)?
+        .ok_or(ApplicationError::NotFound)
 }
 ```
 
@@ -46,15 +39,16 @@ try {
 
 ALWAYS validate user input:
 
-```typescript
-import { z } from 'zod'
+```rust
+impl TryFrom<CreateUserRequest> for NewUser {
+    type Error = ValidationError;
 
-const schema = z.object({
-  email: z.string().email(),
-  age: z.number().int().min(0).max(150)
-})
-
-const validated = schema.parse(input)
+    fn try_from(request: CreateUserRequest) -> Result<Self, Self::Error> {
+        let email = EmailAddress::try_from(request.email)?;
+        let age = Age::try_from(request.age)?;
+        Ok(Self { email, age })
+    }
+}
 ```
 
 ## Code Quality Checklist

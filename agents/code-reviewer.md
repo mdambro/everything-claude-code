@@ -47,17 +47,17 @@ Include specific examples of how to fix issues.
 - Large functions (>50 lines)
 - Large files (>800 lines)
 - Deep nesting (>4 levels)
-- Missing error handling (try/catch)
-- console.log statements
+- Unhandled `Result` values or unsafe error propagation
+- Debug output or sensitive data in logs
 - Mutation patterns
 - Missing tests for new code
 
 ## Performance (MEDIUM)
 
 - Inefficient algorithms (O(n²) when O(n log n) possible)
-- Unnecessary re-renders in React
-- Missing memoization
-- Large bundle sizes
+- Unnecessary Flutter widget rebuilds
+- Expensive work repeated during rendering
+- Excessive client binary and asset size
 - Unoptimized images
 - Missing caching
 - N+1 queries
@@ -66,7 +66,7 @@ Include specific examples of how to fix issues.
 
 - Emoji usage in code/comments
 - TODO/FIXME without tickets
-- Missing JSDoc for public APIs
+- Missing Rust/Dart API documentation where contracts are non-obvious
 - Accessibility issues (missing ARIA labels, poor contrast)
 - Poor variable naming (x, tmp, data)
 - Magic numbers without explanation
@@ -76,13 +76,10 @@ Include specific examples of how to fix issues.
 
 For each issue:
 ```
-[CRITICAL] Hardcoded API key
-File: src/api/client.ts:42
-Issue: API key exposed in source code
-Fix: Move to environment variable
-
-const apiKey = "sk-abc123";  // ❌ Bad
-const apiKey = process.env.API_KEY;  // ✓ Good
+[CRITICAL] Hardcoded service credential
+File: services/api/src/config.rs
+Issue: Privileged credential is embedded in source code
+Fix: Load it from the deployment secret manager and fail startup when missing
 ```
 
 ## Approval Criteria
