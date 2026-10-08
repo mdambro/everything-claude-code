@@ -50,37 +50,33 @@ Agent (planner):
 ## Implementation Phases
 
 ### Phase 1: Database Schema
-- Add notifications table with columns: id, user_id, market_id, type, status, created_at
-- Add user_notification_preferences table for channel preferences
-- Create indexes on user_id and market_id for performance
+- Add PostgreSQL migrations for notifications and user notification preferences using the project's denormalized, query-oriented data model
+- Add indexes for the expected access patterns (such as user and delivery status)
 
-### Phase 2: Notification Service
-- Create notification service in lib/notifications.ts
-- Implement notification queue using BullMQ/Redis
-- Add retry logic for failed deliveries
-- Create notification templates
+### Phase 2: Domain and Application
+- Define notification domain types and invariants
+- Add application use cases and repository/notification-provider ports
+- Define retry and idempotency behavior for delivery
 
-### Phase 3: Integration Points
-- Hook into market resolution logic (when status changes to "resolved")
-- Query all users with positions in market
-- Enqueue notifications for each user
+### Phase 3: Rust Infrastructure
+- Implement Axum handlers and SQLx repository adapters
+- Connect the resolution event to the notification use case
+- Use Tokio for asynchronous delivery; introduce a durable queue/outbox only if delivery guarantees require it
 
 ### Phase 4: Frontend Components
-- Create NotificationBell component in header
-- Add NotificationList modal
-- Implement real-time updates via Supabase subscriptions
-- Add notification preferences page
+- Add notification views and preferences to the Flutter client
+- Deliver live updates through authenticated and authorized Axum WebSocket connections
 
 ## Dependencies
-- Redis (for queue)
+- Rust, Tokio, Axum, SQLx, and PostgreSQL
 - Email service (SendGrid/Resend)
-- Supabase real-time subscriptions
+- Add a durable queue or outbox only when delivery guarantees require it
 
 ## Risks
 - HIGH: Email deliverability (SPF/DKIM required)
 - MEDIUM: Performance with 1000+ users per market
 - MEDIUM: Notification spam if markets resolve frequently
-- LOW: Real-time subscription overhead
+- LOW: WebSocket connection lifecycle and reconnect behavior
 
 ## Estimated Complexity: MEDIUM
 - Backend: 4-6 hours

@@ -1,582 +1,88 @@
 ---
 name: backend-patterns
-description: Backend architecture patterns, API design, database optimization, and server-side best practices for Node.js, Express, and Next.js API routes.
+description: Rust backend architecture patterns for Tokio, Axum, SQLx, PostgreSQL, Kong, Keycloak, and Flipt.
 ---
 
 # Backend Development Patterns
 
-Backend architecture patterns and best practices for scalable server-side applications.
+Use these patterns for WorldFlowAI backend services. Backend implementation uses Rust with Tokio, Axum, SQLx, and PostgreSQL. Do not introduce another application language or framework unless the user explicitly requests it.
 
-## API Design Patterns
+## Clean Architecture
 
-### RESTful API Structure
+Dependencies point inward:
 
-```typescript
-// ✅ Resource-based URLs
-GET    /api/markets                 # List resources
-GET    /api/markets/:id             # Get single resource
-POST   /api/markets                 # Create resource
-PUT    /api/markets/:id             # Replace resource
-PATCH  /api/markets/:id             # Update resource
-DELETE /api/markets/:id             # Delete resource
+- `domain`: entities, value objects, domain services, events, and business invariants. No framework, SQL, network, or filesystem dependencies.
+- `application`: use cases, commands/queries, result models, and ports required by use cases (repositories, clock, identity, external services, feature evaluation). Orchestrate domain behavior without owning transport or persistence details.
+- `infrastructure`: Axum routes and WebSocket adapters, SQLx repositories and row mappings, Flipt/Keycloak/Kong integrations, configuration, and dependency wiring.
 
-// ✅ Query parameters for filtering, sorting, pagination
-GET /api/markets?status=active&sort=volume&limit=20&offset=0
-```
+Keep Axum handlers thin: validate transport input, call one use case, and map its result to an HTTP response. Use cases must not return HTTP responses, SQL rows, or framework-specific errors. Wire concrete adapters at the composition root.
 
-### Repository Pattern
+## API Design
 
-```typescript
-// Abstract data access logic
-interface MarketRepository {
-  findAll(filters?: MarketFilters): Promise<Market[]>
-  findById(id: string): Promise<Market | null>
-  create(data: CreateMarketDto): Promise<Market>
-  update(id: string, data: UpdateMarketDto): Promise<Market>
-  delete(id: string): Promise<void>
-}
+- Model resources and operations around product capabilities; define request/response contracts independently of SQL row types.
+- Validate input at the Axum boundary and enforce business invariants again in the domain where they must always hold.
+- Use stable error responses, explicit pagination, idempotency for retryable writes, and request correlation IDs.
+- Put Kong in front of services when centralized routing or gateway policies are required. Keep domain authorization in the backend; the gateway does not replace service-level checks.
 
-class SupabaseMarketRepository implements MarketRepository {
-  async findAll(filters?: MarketFilters): Promise<Market[]> {
-    let query = supabase.from('markets').select('*')
+## PostgreSQL and SQLx
 
-    if (filters?.status) {
-      query = query.eq('status', filters.status)
-    }
+- PostgreSQL is the persistent database. Access it from infrastructure adapters through SQLx; never expose SQLx rows or pools to domain objects.
+- Prefer denormalized, query-oriented models and selective duplication. Avoid normalization by default; maintain duplicated values through transactions, constraints, idempotent writes, and reconciliation.
+- Bind user-controlled values. Allow-list dynamic identifiers, since SQL parameters cannot represent table or column names.
+- Select only required columns, use indexes that match observed access patterns, and avoid N+1 queries with joins or batched reads.
+- Keep transactions explicit around atomic multi-step changes; do not hold a transaction open during network calls.
 
-    if (filters?.limit) {
-      query = query.limit(filters.limit)
-    }
-
-    const { data, error } = await query
-
-    if (error) throw new Error(error.message)
-    return data
-  }
-
-  // Other methods...
-}
-```
-
-### Service Layer Pattern
-
-```typescript
-// Business logic separated from data access
-class MarketService {
-  constructor(private marketRepo: MarketRepository) {}
-
-  async searchMarkets(query: string, limit: number = 10): Promise<Market[]> {
-    // Business logic
-    const embedding = await generateEmbedding(query)
-    const results = await this.vectorSearch(embedding, limit)
-
-    // Fetch full data
-    const markets = await this.marketRepo.findByIds(results.map(r => r.id))
-
-    // Sort by similarity
-    return markets.sort((a, b) => {
-      const scoreA = results.find(r => r.id === a.id)?.score || 0
-      const scoreB = results.find(r => r.id === b.id)?.score || 0
-      return scoreA - scoreB
-    })
-  }
-
-  private async vectorSearch(embedding: number[], limit: number) {
-    // Vector search implementation
-  }
-}
-```
-
-### Middleware Pattern
-
-```typescript
-// Request/response processing pipeline
-export function withAuth(handler: NextApiHandler): NextApiHandler {
-  return async (req, res) => {
-    const token = req.headers.authorization?.replace('Bearer ', '')
-
-    if (!token) {
-      return res.status(401).json({ error: 'Unauthorized' })
-    }
-
-    try {
-      const user = await verifyToken(token)
-      req.user = user
-      return handler(req, res)
-    } catch (error) {
-      return res.status(401).json({ error: 'Invalid token' })
-    }
-  }
-}
-
-// Usage
-export default withAuth(async (req, res) => {
-  // Handler has access to req.user
-})
-```
-
-## Database Patterns
-
-### Query Optimization
-
-```typescript
-// ✅ GOOD: Select only needed columns
-const { data } = await supabase
-  .from('markets')
-  .select('id, name, status, volume')
-  .eq('status', 'active')
-  .order('volume', { ascending: false })
-  .limit(10)
-
-// ❌ BAD: Select everything
-const { data } = await supabase
-  .from('markets')
-  .select('*')
-```
-
-### N+1 Query Prevention
-
-```typescript
-// ❌ BAD: N+1 query problem
-const markets = await getMarkets()
-for (const market of markets) {
-  market.creator = await getUser(market.creator_id)  // N queries
-}
-
-// ✅ GOOD: Batch fetch
-const markets = await getMarkets()
-const creatorIds = markets.map(m => m.creator_id)
-const creators = await getUsers(creatorIds)  // 1 query
-const creatorMap = new Map(creators.map(c => [c.id, c]))
-
-markets.forEach(market => {
-  market.creator = creatorMap.get(market.creator_id)
-})
-```
-
-### Transaction Pattern
-
-```typescript
-async function createMarketWithPosition(
-  marketData: CreateMarketDto,
-  positionData: CreatePositionDto
-) {
-  // Use Supabase transaction
-  const { data, error } = await supabase.rpc('create_market_with_position', {
-    market_data: marketData,
-    position_data: positionData
-  })
-
-  if (error) throw new Error('Transaction failed')
-  return data
-}
-
-// SQL function in Supabase
-CREATE OR REPLACE FUNCTION create_market_with_position(
-  market_data jsonb,
-  position_data jsonb
+```rust
+let markets = sqlx::query_as::<_, MarketRow>(
+    "SELECT id, name, status FROM markets WHERE status = $1 ORDER BY created_at DESC LIMIT $2"
 )
-RETURNS jsonb
-LANGUAGE plpgsql
-AS $$
-BEGIN
-  -- Start transaction automatically
-  INSERT INTO markets VALUES (market_data);
-  INSERT INTO positions VALUES (position_data);
-  RETURN jsonb_build_object('success', true);
-EXCEPTION
-  WHEN OTHERS THEN
-    -- Rollback happens automatically
-    RETURN jsonb_build_object('success', false, 'error', SQLERRM);
-END;
-$$;
+.bind(status)
+.bind(limit)
+.fetch_all(&pool)
+.await?;
+
+let mut transaction = pool.begin().await?;
+sqlx::query("INSERT INTO notifications (user_id, message) VALUES ($1, $2)")
+    .bind(user_id)
+    .bind(message)
+    .execute(&mut *transaction)
+    .await?;
+transaction.commit().await?;
 ```
 
-## Caching Strategies
+Map `MarketRow` to a domain entity inside the repository adapter. Use migrations as the versioned source of schema changes.
 
-### Redis Caching Layer
+## Authentication and Authorization
 
-```typescript
-class CachedMarketRepository implements MarketRepository {
-  constructor(
-    private baseRepo: MarketRepository,
-    private redis: RedisClient
-  ) {}
+- Use Keycloak as the initial identity provider and JWT issuer.
+- Validate JWT signatures using Keycloak's published keys and check issuer, audience, expiry, and required claims. Cache keys safely and support key rotation.
+- Authenticate at Axum boundaries, then authorize every use case against the requested resource. Do not trust user IDs or roles supplied in request bodies.
+- Kong can enforce edge policies, but each service must still validate identity and perform resource-level authorization.
 
-  async findById(id: string): Promise<Market | null> {
-    // Check cache first
-    const cached = await this.redis.get(`market:${id}`)
+## Feature Flags
 
-    if (cached) {
-      return JSON.parse(cached)
-    }
+- Use Flipt for feature-flag evaluation; do not implement a separate flag store or hard-code flag state in the service.
+- Keep flag configuration in the GitHub repository designated by the user and use Flipt's supported Git-backed configuration workflow.
+- When requirements indicate a feature needs a flag, the architect must ask which GitHub repository contains the Flipt configuration. Record the repository before finalizing the design; never guess it.
+- Keep flag evaluation behind an application port so domain rules do not depend on Flipt SDK types. Define safe defaults and behavior when the flag service is unavailable.
 
-    // Cache miss - fetch from database
-    const market = await this.baseRepo.findById(id)
+## Asynchronous Work and Real-Time
 
-    if (market) {
-      // Cache for 5 minutes
-      await this.redis.setex(`market:${id}`, 300, JSON.stringify(market))
-    }
+- Use Tokio for asynchronous I/O. Bound concurrency, configure timeouts, and propagate cancellation where practical.
+- Use Axum WebSockets for live updates. Authenticate the handshake, authorize each resource/event stream, validate message size and shape, and handle disconnects, backpressure, and token expiry.
+- Add a durable queue or outbox only when reliability requirements call for it; do not assume an in-memory task survives process restarts.
 
-    return market
-  }
+## Error Handling and Observability
 
-  async invalidateCache(id: string): Promise<void> {
-    await this.redis.del(`market:${id}`)
-  }
-}
-```
+- Use typed errors within domain/application layers; map them to stable HTTP status and error codes in the Axum adapter.
+- Do not return database internals, credentials, stack traces, or sensitive upstream responses to clients.
+- Emit structured logs with request/correlation IDs. Redact secrets and personally identifying data.
+- Instrument latency, failure rates, database pool saturation, WebSocket connections, and external-service timeouts.
 
-### Cache-Aside Pattern
+## Testing
 
-```typescript
-async function getMarketWithCache(id: string): Promise<Market> {
-  const cacheKey = `market:${id}`
-
-  // Try cache
-  const cached = await redis.get(cacheKey)
-  if (cached) return JSON.parse(cached)
-
-  // Cache miss - fetch from DB
-  const market = await db.markets.findUnique({ where: { id } })
-
-  if (!market) throw new Error('Market not found')
-
-  // Update cache
-  await redis.setex(cacheKey, 300, JSON.stringify(market))
-
-  return market
-}
-```
-
-## Error Handling Patterns
-
-### Centralized Error Handler
-
-```typescript
-class ApiError extends Error {
-  constructor(
-    public statusCode: number,
-    public message: string,
-    public isOperational = true
-  ) {
-    super(message)
-    Object.setPrototypeOf(this, ApiError.prototype)
-  }
-}
-
-export function errorHandler(error: unknown, req: Request): Response {
-  if (error instanceof ApiError) {
-    return NextResponse.json({
-      success: false,
-      error: error.message
-    }, { status: error.statusCode })
-  }
-
-  if (error instanceof z.ZodError) {
-    return NextResponse.json({
-      success: false,
-      error: 'Validation failed',
-      details: error.errors
-    }, { status: 400 })
-  }
-
-  // Log unexpected errors
-  console.error('Unexpected error:', error)
-
-  return NextResponse.json({
-    success: false,
-    error: 'Internal server error'
-  }, { status: 500 })
-}
-
-// Usage
-export async function GET(request: Request) {
-  try {
-    const data = await fetchData()
-    return NextResponse.json({ success: true, data })
-  } catch (error) {
-    return errorHandler(error, request)
-  }
-}
-```
-
-### Retry with Exponential Backoff
-
-```typescript
-async function fetchWithRetry<T>(
-  fn: () => Promise<T>,
-  maxRetries = 3
-): Promise<T> {
-  let lastError: Error
-
-  for (let i = 0; i < maxRetries; i++) {
-    try {
-      return await fn()
-    } catch (error) {
-      lastError = error as Error
-
-      if (i < maxRetries - 1) {
-        // Exponential backoff: 1s, 2s, 4s
-        const delay = Math.pow(2, i) * 1000
-        await new Promise(resolve => setTimeout(resolve, delay))
-      }
-    }
-  }
-
-  throw lastError!
-}
-
-// Usage
-const data = await fetchWithRetry(() => fetchFromAPI())
-```
-
-## Authentication & Authorization
-
-### JWT Token Validation
-
-```typescript
-import jwt from 'jsonwebtoken'
-
-interface JWTPayload {
-  userId: string
-  email: string
-  role: 'admin' | 'user'
-}
-
-export function verifyToken(token: string): JWTPayload {
-  try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET!) as JWTPayload
-    return payload
-  } catch (error) {
-    throw new ApiError(401, 'Invalid token')
-  }
-}
-
-export async function requireAuth(request: Request) {
-  const token = request.headers.get('authorization')?.replace('Bearer ', '')
-
-  if (!token) {
-    throw new ApiError(401, 'Missing authorization token')
-  }
-
-  return verifyToken(token)
-}
-
-// Usage in API route
-export async function GET(request: Request) {
-  const user = await requireAuth(request)
-
-  const data = await getDataForUser(user.userId)
-
-  return NextResponse.json({ success: true, data })
-}
-```
-
-### Role-Based Access Control
-
-```typescript
-type Permission = 'read' | 'write' | 'delete' | 'admin'
-
-interface User {
-  id: string
-  role: 'admin' | 'moderator' | 'user'
-}
-
-const rolePermissions: Record<User['role'], Permission[]> = {
-  admin: ['read', 'write', 'delete', 'admin'],
-  moderator: ['read', 'write', 'delete'],
-  user: ['read', 'write']
-}
-
-export function hasPermission(user: User, permission: Permission): boolean {
-  return rolePermissions[user.role].includes(permission)
-}
-
-export function requirePermission(permission: Permission) {
-  return async (request: Request) => {
-    const user = await requireAuth(request)
-
-    if (!hasPermission(user, permission)) {
-      throw new ApiError(403, 'Insufficient permissions')
-    }
-
-    return user
-  }
-}
-
-// Usage
-export const DELETE = requirePermission('delete')(async (request: Request) => {
-  // Handler with permission check
-})
-```
-
-## Rate Limiting
-
-### Simple In-Memory Rate Limiter
-
-```typescript
-class RateLimiter {
-  private requests = new Map<string, number[]>()
-
-  async checkLimit(
-    identifier: string,
-    maxRequests: number,
-    windowMs: number
-  ): Promise<boolean> {
-    const now = Date.now()
-    const requests = this.requests.get(identifier) || []
-
-    // Remove old requests outside window
-    const recentRequests = requests.filter(time => now - time < windowMs)
-
-    if (recentRequests.length >= maxRequests) {
-      return false  // Rate limit exceeded
-    }
-
-    // Add current request
-    recentRequests.push(now)
-    this.requests.set(identifier, recentRequests)
-
-    return true
-  }
-}
-
-const limiter = new RateLimiter()
-
-export async function GET(request: Request) {
-  const ip = request.headers.get('x-forwarded-for') || 'unknown'
-
-  const allowed = await limiter.checkLimit(ip, 100, 60000)  // 100 req/min
-
-  if (!allowed) {
-    return NextResponse.json({
-      error: 'Rate limit exceeded'
-    }, { status: 429 })
-  }
-
-  // Continue with request
-}
-```
-
-## Background Jobs & Queues
-
-### Simple Queue Pattern
-
-```typescript
-class JobQueue<T> {
-  private queue: T[] = []
-  private processing = false
-
-  async add(job: T): Promise<void> {
-    this.queue.push(job)
-
-    if (!this.processing) {
-      this.process()
-    }
-  }
-
-  private async process(): Promise<void> {
-    this.processing = true
-
-    while (this.queue.length > 0) {
-      const job = this.queue.shift()!
-
-      try {
-        await this.execute(job)
-      } catch (error) {
-        console.error('Job failed:', error)
-      }
-    }
-
-    this.processing = false
-  }
-
-  private async execute(job: T): Promise<void> {
-    // Job execution logic
-  }
-}
-
-// Usage for indexing markets
-interface IndexJob {
-  marketId: string
-}
-
-const indexQueue = new JobQueue<IndexJob>()
-
-export async function POST(request: Request) {
-  const { marketId } = await request.json()
-
-  // Add to queue instead of blocking
-  await indexQueue.add({ marketId })
-
-  return NextResponse.json({ success: true, message: 'Job queued' })
-}
-```
-
-## Logging & Monitoring
-
-### Structured Logging
-
-```typescript
-interface LogContext {
-  userId?: string
-  requestId?: string
-  method?: string
-  path?: string
-  [key: string]: unknown
-}
-
-class Logger {
-  log(level: 'info' | 'warn' | 'error', message: string, context?: LogContext) {
-    const entry = {
-      timestamp: new Date().toISOString(),
-      level,
-      message,
-      ...context
-    }
-
-    console.log(JSON.stringify(entry))
-  }
-
-  info(message: string, context?: LogContext) {
-    this.log('info', message, context)
-  }
-
-  warn(message: string, context?: LogContext) {
-    this.log('warn', message, context)
-  }
-
-  error(message: string, error: Error, context?: LogContext) {
-    this.log('error', message, {
-      ...context,
-      error: error.message,
-      stack: error.stack
-    })
-  }
-}
-
-const logger = new Logger()
-
-// Usage
-export async function GET(request: Request) {
-  const requestId = crypto.randomUUID()
-
-  logger.info('Fetching markets', {
-    requestId,
-    method: 'GET',
-    path: '/api/markets'
-  })
-
-  try {
-    const markets = await fetchMarkets()
-    return NextResponse.json({ success: true, data: markets })
-  } catch (error) {
-    logger.error('Failed to fetch markets', error as Error, { requestId })
-    return NextResponse.json({ error: 'Internal error' }, { status: 500 })
-  }
-}
-```
-
-**Remember**: Backend patterns enable scalable, maintainable server-side applications. Choose patterns that fit your complexity level.
+- Unit-test domain invariants without I/O.
+- Test use cases with fake implementations of application ports.
+- Run SQLx repository and migration tests against isolated PostgreSQL.
+- Test Axum routes, authentication/authorization, and WebSocket lifecycle at adapter boundaries.
+- Test Flipt outage/default behavior and Keycloak key rotation/claim validation.

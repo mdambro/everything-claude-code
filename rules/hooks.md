@@ -15,9 +15,7 @@
 
 ### PostToolUse
 - **PR creation**: Logs PR URL and GitHub Actions status
-- **Prettier**: Auto-formats JS/TS files after edit
-- **TypeScript check**: Runs tsc after editing .ts/.tsx files
-- **console.log warning**: Warns about console.log in edited files
+- Formatting and analysis are run explicitly with `cargo fmt`, `dart format`, and `flutter analyze`
 
 ### Stop
 - **console.log audit**: Checks all modified files for console.log before session ends

@@ -42,7 +42,7 @@ Package Managers:
   npm             Node Package Manager (default with Node.js)
   pnpm            Fast, disk space efficient package manager
   yarn            Classic Yarn package manager
-  bun             All-in-one JavaScript runtime & toolkit
+  bun             All-in-one runtime & toolkit
 
 Examples:
   # Detect current package manager

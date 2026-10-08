@@ -3,9 +3,9 @@
 Safely identify and remove dead code with test verification:
 
 1. Run dead code analysis tools:
-   - knip: Find unused exports and files
-   - depcheck: Find unused dependencies
-   - ts-prune: Find unused TypeScript exports
+   - cargo machete: Find unused Rust dependencies
+   - cargo check and Clippy: Find unreachable or unused Rust code
+   - Flutter analyzer: Find unused Dart declarations
 
 2. Generate comprehensive report in .reports/dead-code-analysis.md
 

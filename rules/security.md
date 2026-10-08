@@ -14,16 +14,9 @@ Before ANY commit:
 
 ## Secret Management
 
-```typescript
-// NEVER: Hardcoded secrets
-const apiKey = "sk-proj-xxxxx"
-
-// ALWAYS: Environment variables
-const apiKey = process.env.OPENAI_API_KEY
-
-if (!apiKey) {
-  throw new Error('OPENAI_API_KEY not configured')
-}
+```rust
+let api_key = std::env::var("AI_PROVIDER_API_KEY")
+    .expect("AI_PROVIDER_API_KEY must be configured by the runtime");
 ```
 
 ## Security Response Protocol

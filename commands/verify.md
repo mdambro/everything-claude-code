@@ -7,11 +7,11 @@ Run comprehensive verification on current codebase state.
 Execute verification in this exact order:
 
 1. **Build Check**
-   - Run the build command for this project
+   - Run `cargo check --workspace` and the appropriate Flutter build/analyzer command
    - If it fails, report errors and STOP
 
 2. **Type Check**
-   - Run TypeScript/type checker
+   - Run Rust compiler checks and `flutter analyze`
    - Report all errors with file:line
 
 3. **Lint Check**
@@ -39,7 +39,7 @@ Produce a concise verification report:
 VERIFICATION: [PASS/FAIL]
 
 Build:    [OK/FAIL]
-Types:    [OK/X errors]
+Analysis: [OK/X errors]
 Lint:     [OK/X issues]
 Tests:    [X/Y passed, Z% coverage]
 Secrets:  [OK/X found]
